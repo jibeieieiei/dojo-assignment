@@ -205,7 +205,7 @@ export default function Home() {
                 } else {
                   return (
                     <div
-                      className="border border-red-500 text-red-700 w-[450px] h-[225px] flex flex-col justify-center items-center"
+                      className="border border-red-500 text-red-700 w-[450px] h-[225px] flex flex-col justify-center items-center "
                       key={c.id}
                     >
                       <span>no {c.symbol} Data please move back</span>
@@ -213,9 +213,9 @@ export default function Home() {
                         onClick={() => {
                           handleMoveBack(c.id)
                         }}
-                        className="cursor-pointer hover:bg-red-300"
+                        className="cursor-pointer hover:bg-red-300 underline mt-2"
                       >
-                        move back
+                        Move Back Right Here
                       </button>
                     </div>
                   )
