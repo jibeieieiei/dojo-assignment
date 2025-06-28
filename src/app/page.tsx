@@ -1,103 +1,229 @@
-import Image from "next/image";
+'use client'
+import { CONTAINERS, PRICE } from './data'
+import {
+  closestCorners,
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  PointerSensor,
+  UniqueIdentifier,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import { arrayMove, SortableContext } from '@dnd-kit/sortable'
+
+import { useState } from 'react'
+import Column from '@/components/Column'
+import { ContainerType } from '@/types/ContainerType'
+import Charts from '@/components/Charts'
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [containers, setContainers] = useState<ContainerType[]>(CONTAINERS)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px of movement required before activation
+      },
+    })
+  )
+
+  const findContainerId = (coinId: UniqueIdentifier) => {
+    if (containers.some((container) => container.id === coinId)) {
+      return coinId
+    }
+    return containers.find((container) =>
+      container.coins.some((item) => item.id === coinId)
+    )?.id
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over) return
+    console.log(event, containers, 'over container')
+
+    const activeId = active.id as string
+    const overId = over.id as string
+
+    const activeContainer = findContainerId(activeId)
+    const overContainer = findContainerId(overId) || overId
+
+    if (
+      !activeContainer ||
+      !overContainer ||
+      activeContainer === overContainer
+    ) {
+      return
+    }
+
+    setContainers((prev) => {
+      const activeContainerIndex = prev.findIndex(
+        (container) => container.id === activeContainer
+      )
+      const overContainerIndex = prev.findIndex(
+        (container) => container.id === overContainer
+      )
+
+      const activeItems = prev[activeContainerIndex].coins
+      const overItems = prev[overContainerIndex].coins
+
+      const activeIndex = activeItems.findIndex((item) => item.id === activeId)
+      const overIndex = overItems.findIndex((item) => item.id === overId)
+
+      let newIndex: number
+      if (containers.some((container) => container.id === overId)) {
+        newIndex = overItems.length
+      } else {
+        const isBelowOverItem = over && overIndex < overItems.length - 1
+        const modifier = isBelowOverItem ? 1 : 0
+        newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length
+      }
+
+      const activeCoin = activeItems[activeIndex]
+      const updatedCoin = { ...activeCoin, status: overContainer.toString() }
+
+      return prev.map((container, index) => {
+        if (index === activeContainerIndex) {
+          return {
+            ...container,
+            coins: container.coins.filter((coin) => coin.id !== activeId),
+          }
+        } else if (index === overContainerIndex) {
+          const newCoins = [...container.coins]
+          newCoins.splice(newIndex, 0, updatedCoin)
+          return {
+            ...container,
+            coins: newCoins,
+          }
+        }
+        return container
+      })
+    })
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over) {
+      return
+    }
+
+    const activeId = active.id as string
+    const overId = over.id as string
+
+    const activeContainer = findContainerId(activeId)
+    const overContainer = findContainerId(overId) || overId
+
+    if (!activeContainer || !overContainer) {
+      return
+    }
+
+    if (activeContainer === overContainer) {
+      setContainers((prev) => {
+        const containerIndex = prev.findIndex(
+          (container) => container.id === activeContainer
+        )
+        const items = prev[containerIndex].coins
+
+        const activeIndex = items.findIndex((item) => item.id === activeId)
+        const overIndex = items.findIndex((item) => item.id === overId)
+
+        return prev.map((container, index) => {
+          if (index === containerIndex) {
+            return {
+              ...container,
+              coins: arrayMove(container.coins, activeIndex, overIndex),
+            }
+          }
+          return container
+        })
+      })
+    }
+  }
+
+  const handleMoveBack = (id: UniqueIdentifier) => {
+    const containerId = findContainerId(id)
+    const items = containers
+      .find((container) => container.id === containerId)
+      ?.coins.find((item) => item.id === id)
+    if (items) {
+      setContainers((prev) => {
+        return prev.map((container) =>
+          container.id === containerId
+            ? {
+                ...container,
+                coins: container.coins.filter((item) => item.id !== id),
+              }
+            : {
+                ...container,
+                coins: [...container.coins, items],
+              }
+        )
+      })
+    }
+  }
+
+  return (
+    <div className="w-full flex h-screen">
+      <section className="flex-1 flex h-full">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="w-full flex gap-6 h-full">
+            {containers.map((container) => (
+              <SortableContext
+                key={container.id}
+                items={container.coins.map((coin) => coin.id)}
+              >
+                <Column
+                  id={container.id}
+                  title={container.title}
+                  coins={container.coins}
+                />
+              </SortableContext>
+            ))}
+          </div>
+        </DndContext>
+      </section>
+
+      <div className="ml-6 w-full flex flex-col items-center gap-4 p-4 bg-blue-400 max-w-[1000px] overflow-y-auto">
+        <span className="font-bold text-2xl self-start">Chart</span>
+        <div className="flex items-center gap-4 *:bg-white flex-wrap">
+          {containers
+            .filter((item) => item.id === 'watch')
+            .map((item) =>
+              item.coins.map((c) => {
+                const data = PRICE.find((p) => p.name === c.symbol)
+
+                if (data) {
+                  return (
+                    <Charts key={c.id} data={data.value} date={data.date} />
+                  )
+                } else {
+                  return (
+                    <div
+                      className="border border-red-500 text-red-700 w-[450px] h-[225px] flex flex-col justify-center items-center"
+                      key={c.id}
+                    >
+                      <span>no {c.symbol} Data please move back</span>
+                      <button
+                        onClick={() => {
+                          handleMoveBack(c.id)
+                        }}
+                        className="cursor-pointer hover:bg-red-300"
+                      >
+                        move back
+                      </button>
+                    </div>
+                  )
+                }
+              })
+            )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
-  );
+  )
 }
